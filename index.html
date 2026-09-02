@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>HEY! HEY! Mobile Rhythm</title>
@@ -13,7 +13,7 @@
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08070d;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;touch-action:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08070d;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 body{overscroll-behavior:none}
 #game{position:fixed;inset:0;background:radial-gradient(circle at 50% -10%,#3b2859 0,#171120 38%,#08070d 70%);overflow:hidden}
 #hud{position:absolute;z-index:20;top:calc(10px + var(--safe-top));left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none;text-shadow:0 2px 7px #000}
@@ -270,5 +270,22 @@ document.addEventListener('contextmenu',e=>e.preventDefault());
 reset();
 })();
 </script>
+
+<script>
+/* iPhone/Safari gameplay guard */
+(() => {
+  let lastTouchEnd = 0;
+  document.addEventListener('dblclick', e => e.preventDefault(), {passive:false});
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 350) e.preventDefault();
+    lastTouchEnd = now;
+  }, {passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(type => {
+    document.addEventListener(type, e => e.preventDefault(), {passive:false});
+  });
+})();
+</script>
+
 </body>
 </html>
