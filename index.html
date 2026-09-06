@@ -52,6 +52,29 @@ input[type=range]{width:100%}
 @media (orientation:landscape) and (max-height:550px){
   #orientationHint{display:flex}
 }
+
+#pauseBtn{position:absolute;z-index:70;top:calc(8px + var(--safe-top));left:50%;transform:translateX(-50%);width:44px;height:38px;min-width:0;margin:0;padding:0;border-radius:12px;background:#ffffff18;color:#fff;border:1px solid #ffffff30;font-size:19px;display:none;align-items:center;justify-content:center}
+#lifeHud{position:absolute;z-index:24;top:calc(59px + var(--safe-top));left:12px;right:12px;display:flex;align-items:center;gap:8px;pointer-events:none;text-shadow:0 2px 7px #000}
+#lifeText{font-size:12px;font-weight:900;white-space:nowrap}
+#lifeTrack{height:7px;flex:1;border-radius:99px;background:#ffffff18;overflow:hidden;border:1px solid #ffffff18}
+#lifeFill{height:100%;width:100%;background:linear-gradient(90deg,#ff8da8,#fff);transition:width .15s ease}
+#progress{top:calc(78px + var(--safe-top))}
+#pauseMenu,#countdown{display:none}
+#countdown{background:#08070d99;z-index:130;pointer-events:none}
+#countdownText{font-size:clamp(64px,24vw,120px);font-weight:1000;text-shadow:0 5px 0 #000,0 0 32px #fff8}
+.pauseBtns{display:grid;gap:8px;margin-top:14px}
+.pauseBtns button{width:100%;margin:0}
+#result .card{padding:20px 18px}
+#resultStatus{font-size:13px;font-weight:900;letter-spacing:.18em;opacity:.8}
+#rank{font-size:72px;line-height:.95;font-weight:1000;margin:5px 0;text-shadow:0 4px 0 #000,0 0 26px #fff4}
+#resultTitle{font-size:18px;font-weight:1000;margin:5px 0 0}
+#resultDiff{font-size:12px;opacity:.7;margin:2px 0 10px}
+#resultScore{font-size:36px;font-weight:1000;letter-spacing:.04em}
+#resultLife{font-weight:900}
+.resultActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.resultActions button{min-width:0;width:100%;margin:0;padding:13px 10px}
+#shareHint{font-size:11px;opacity:.55;margin-top:10px}
+
 </style>
 </head>
 <body>
@@ -62,6 +85,8 @@ input[type=range]{width:100%}
     <div class="hudbox"><div class="label">SCORE</div><div class="value" id="score">0000000</div></div>
     <div class="hudbox" id="comboBox"><div class="label">COMBO</div><div class="value" id="combo">0</div></div>
   </div>
+  <button id="pauseBtn" aria-label="ポーズ">Ⅱ</button>
+  <div id="lifeHud"><div id="lifeText">LIFE 20/20</div><div id="lifeTrack"><div id="lifeFill"></div></div></div>
   <div id="progress"><div id="progressInner"></div></div>
 
   <div id="field">
@@ -99,18 +124,40 @@ input[type=range]{width:100%}
     </div>
   </div>
 
+  <div class="overlay" id="pauseMenu">
+    <div class="card">
+      <h1>PAUSE</h1>
+      <p class="small">ちょっと休憩。</p>
+      <div class="pauseBtns">
+        <button id="resumeBtn">▶ 続ける</button>
+        <button class="alt" id="restartBtn">↻ リスタート</button>
+        <button class="alt" id="homeBtn">⌂ ホームへ戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="countdown"><div id="countdownText">3</div></div>
+
   <div class="overlay" id="result">
     <div class="card">
-      <h1>RESULT</h1>
-      <p><span class="small">SCORE</span><br><strong style="font-size:34px" id="finalScore">0</strong></p>
-      <p><span class="small">MAX COMBO</span><br><strong style="font-size:28px" id="maxCombo">0</strong></p>
+      <div id="resultStatus">CLEAR!</div>
+      <div id="rank">A</div>
+      <div id="resultTitle">（_｣ﾟ∀ﾟ）｣ HEY！HEY！</div>
+      <div id="resultDiff">NORMAL Lv.6</div>
+      <div><span class="small">SCORE</span><br><span id="finalScore" class="resultScore">0</span></div>
       <div class="resultGrid">
         <div>PERFECT <strong id="rp">0</strong></div>
         <div>GREAT <strong id="rg">0</strong></div>
         <div>GOOD <strong id="rgo">0</strong></div>
         <div>MISS <strong id="rm">0</strong></div>
+        <div>MAX COMBO <strong id="maxCombo">0</strong></div>
+        <div>LIFE <strong id="resultLife">20/20</strong></div>
       </div>
-      <button id="retry">もう一度</button>
+      <div class="resultActions">
+        <button id="retry">RETRY</button>
+        <button class="alt" id="resultHome">HOME</button>
+      </div>
+      <div id="shareHint">📸 この画面をスクショしてスコアをシェア！</div>
     </div>
   </div>
 </div>
@@ -135,8 +182,14 @@ const pads=[...document.querySelectorAll('.pad')];
 const laneEls=[...document.querySelectorAll('.lane')];
 const slider=document.getElementById('offset');
 const offsetLabel=document.getElementById('offsetLabel');
+const pauseBtn=document.getElementById('pauseBtn');
+const pauseMenu=document.getElementById('pauseMenu');
+const countdown=document.getElementById('countdown');
+const countdownText=document.getElementById('countdownText');
+const lifeText=document.getElementById('lifeText');
+const lifeFill=document.getElementById('lifeFill');
 
-let offset=0,running=false,raf=0,notes=[],combo=0,maxCombo=0,score=0,resultShown=false;
+let offset=0,running=false,paused=false,raf=0,notes=[],combo=0,maxCombo=0,score=0,resultShown=false,life=20,failed=false;
 let counts={perfect:0,great:0,good:0,miss:0};
 const travel=1.65;
 
@@ -147,14 +200,27 @@ slider.addEventListener('input',()=>{
 
 function reset(){
   cancelAnimationFrame(raf);
-  running=false; resultShown=false;
+  running=false; paused=false; resultShown=false; failed=false;
   audio.pause(); try{audio.currentTime=0}catch(e){}
   document.querySelectorAll('.note').forEach(e=>e.remove());
   notes=C.notes.map(n=>({...n,judged:false,el:null}));
-  combo=0;maxCombo=0;score=0;
+  combo=0;maxCombo=0;score=0;life=20;
   counts={perfect:0,great:0,good:0,miss:0};
   scoreEl.textContent='0000000';comboEl.textContent='0';progress.style.width='0%';
-  result.style.display='none';
+  updateLife();
+  result.style.display='none'; pauseMenu.style.display='none'; countdown.style.display='none'; pauseBtn.style.display='none';
+}
+function updateLife(){
+  life=Math.max(0,Math.min(20,life));
+  lifeText.textContent=`LIFE ${life}/20`;
+  lifeFill.style.width=(life/20*100)+'%';
+}
+function changeLife(delta){
+  life+=delta; updateLife();
+  if(life<=0&&!resultShown){ failed=true; finish(true); }
+}
+function comboLifeBonus(prev,next){
+  if(next>0 && Math.floor(next/100)>Math.floor(prev/100)) changeLife(1);
 }
 function showJudge(text){
   jt.textContent=text;
@@ -169,11 +235,13 @@ function apply(note,type){
   if(note.el)note.el.remove();
   counts[type]++;
   if(type==='miss'){
-    combo=0;showJudge('MISS');
+    combo=0;showJudge('MISS');changeLife(-1);
   }else{
+    const prevCombo=combo;
     combo++;maxCombo=Math.max(maxCombo,combo);
     const base=type==='perfect'?1000:type==='great'?700:400;
     score+=base+Math.min(combo,100)*3;
+    comboLifeBonus(prevCombo,combo);
     showJudge(type.toUpperCase());
   }
   comboEl.textContent=combo;
@@ -184,7 +252,7 @@ function hit(lane){
   const t=audio.currentTime+offset;
   const c=notes.filter(n=>!n.judged&&n.lane===lane&&Math.abs(n.time-t)<=0.150);
   if(!c.length){
-    combo=0;comboEl.textContent='0';showJudge('MISS');return;
+    combo=0;comboEl.textContent='0';counts.miss++;showJudge('MISS');changeLife(-1);return;
   }
   c.sort((a,b)=>Math.abs(a.time-t)-Math.abs(b.time-t));
   const n=c[0],d=Math.abs(n.time-t);
@@ -226,6 +294,7 @@ function loop(){
       n.el.style.transform=`translateY(${y}px)`;
     }
     if(dt<-.150)apply(n,'miss');
+    if(!running)return;
     if(dt>travel+.05)break;
   }
   const dur=audio.duration||C.timing.audio_duration_seconds||260;
@@ -233,31 +302,72 @@ function loop(){
   if((audio.ended||audio.currentTime>=dur-.05)&&!resultShown){finish();return}
   raf=requestAnimationFrame(loop);
 }
-function finish(){
-  running=false;resultShown=true;cancelAnimationFrame(raf);
-  document.getElementById('finalScore').textContent=score;
+function getRank(){
+  if(failed)return 'F';
+  const total=counts.perfect+counts.great+counts.good+counts.miss;
+  const acc=total?((counts.perfect+counts.great*.7+counts.good*.4)/total)*100:0;
+  return acc>=95?'S':acc>=85?'A':acc>=70?'B':'C';
+}
+function finish(isFail=false){
+  if(resultShown)return;
+  running=false; paused=false; resultShown=true; failed=failed||isFail; cancelAnimationFrame(raf); audio.pause();
+  pauseBtn.style.display='none'; pauseMenu.style.display='none'; countdown.style.display='none';
+  document.getElementById('resultStatus').textContent=failed?'FAILED':'CLEAR!';
+  document.getElementById('rank').textContent=getRank();
+  document.getElementById('finalScore').textContent=String(score).padStart(7,'0');
   document.getElementById('maxCombo').textContent=maxCombo;
   document.getElementById('rp').textContent=counts.perfect;
   document.getElementById('rg').textContent=counts.great;
   document.getElementById('rgo').textContent=counts.good;
   document.getElementById('rm').textContent=counts.miss;
+  document.getElementById('resultLife').textContent=`${life}/20`;
   result.style.display='flex';
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function countdownThenPlay(fromStart=false){
+  countdown.style.display='flex';
+  for(const n of ['3','2','1','GO!']){countdownText.textContent=n;await sleep(n==='GO!'?350:650);}
+  countdown.style.display='none';
+  if(fromStart){ try{audio.currentTime=0}catch(e){} }
+  await audio.play();
+  running=true;paused=false;pauseBtn.style.display='flex';
+  loop();
+}
+async function pauseGame(){
+  if(!running||resultShown)return;
+  running=false;paused=true;cancelAnimationFrame(raf);audio.pause();pauseBtn.style.display='none';pauseMenu.style.display='flex';
+}
+async function resumeGame(){
+  if(!paused)return;
+  pauseMenu.style.display='none';
+  try{await countdownThenPlay(false)}catch(e){pauseMenu.style.display='flex'}
+}
+async function restartGame(){
+  pauseMenu.style.display='none'; result.style.display='none'; reset(); start.style.display='none';
+  try{await countdownThenPlay(true)}catch(e){start.style.display='flex'}
+}
+function goHome(){
+  reset(); start.style.display='flex'; result.style.display='none'; pauseMenu.style.display='none';
 }
 async function startGame(){
   reset();
   start.style.display='none';
   try{
-    // iOS needs playback started directly from this tap.
-    await audio.play();
-    running=true;
-    loop();
+    // iOS unlock: start and immediately pause from the user's tap.
+    await audio.play(); audio.pause(); try{audio.currentTime=0}catch(e){}
+    await countdownThenPlay(true);
   }catch(err){
     start.style.display='flex';
     alert('音源を開けなかったよ。「音源を選び直す」から hey_hey.mp3 を選んでね。');
   }
 }
 document.getElementById('play').addEventListener('click',startGame);
-document.getElementById('retry').addEventListener('click',()=>{result.style.display='none';start.style.display='flex'});
+document.getElementById('retry').addEventListener('click',restartGame);
+document.getElementById('resultHome').addEventListener('click',goHome);
+pauseBtn.addEventListener('click',pauseGame);
+document.getElementById('resumeBtn').addEventListener('click',resumeGame);
+document.getElementById('restartBtn').addEventListener('click',restartGame);
+document.getElementById('homeBtn').addEventListener('click',goHome);
 const picker=document.getElementById('picker');
 document.getElementById('choose').addEventListener('click',()=>picker.click());
 picker.addEventListener('change',()=>{
